@@ -1533,28 +1533,6 @@ void postSetItemEnd(int command) {
 	}
 }
 
-void postChangeItemGroup(int command) {
-	MediaItem* item = getItemWithFocus();
-	if(!item) {
-		return;
-	}
-	int selCount = CountSelectedMediaItems(nullptr);
-	int groupId = *(int*)GetSetMediaItemInfo(item, "I_GROUPID", nullptr);
-	if (groupId) {
-		// Translators: Reported when adding items to a group. {} will be replaced
-		// with the number of items; e.g. "2 items added to group".
-		outputMessage(format(
-			translate_plural("item added to group", "{} items added to group", selCount),
-			selCount));
-	} else {
-		// Translators: Reported when removing items from a group. {} will be
-		// replaced with the number of items; e.g. "2 items removed from group".
-		outputMessage(format(
-			translate_plural("item removed from group", "{} items removed from group", selCount),
-			selCount));
-	}
-}
-
 void postGoToTakeMarker(int command) {
 	int itemCount = CountSelectedMediaItems(0);
 	if (itemCount == 0) {
@@ -1798,8 +1776,6 @@ PostCommand POST_COMMANDS[] = {
 	{40631, postCursorMovement}, // Go to end of time selection
 	{40632, postCursorMovement}, // Go to start of loop
 	{40633, postCursorMovement}, // Go to end of loop
-	{40032, postChangeItemGroup}, // Item grouping: Group items
-	{40033, postChangeItemGroup}, // Item grouping: Remove items from group
 	{42393, postGoToTakeMarker}, // Item: Set cursor to previous take marker in selected items
 	{42394, postGoToTakeMarker}, // Item: Set cursor to next take marker in selected items
 	{40296, postSelectMultipleTracks}, // Track: Select all tracks
@@ -2418,11 +2394,14 @@ void moveToItem(int direction, bool clearSelection=true, bool select=true) {
 		if ((clearSelection || select) && makeUndoPoint)
 			Undo_EndBlock("Change Item Selection", 0);
 		SetEditCurPos(pos, true, true); // Seek playback.
-
-		// Report the item.
 		fakeFocus = FOCUS_ITEM;
 		selectedEnvelopeIsTake = true;
 		SetCursorContext(1, NULL);
+		if (!shouldReportTimeMovement()) {
+			return;
+		}
+
+		// Report the item.
 		ostringstream s;
 		s << i + 1;
 		MediaItem_Take* take = GetActiveTake(item);
@@ -2443,6 +2422,12 @@ void moveToItem(int direction, bool clearSelection=true, bool select=true) {
 			// Translators: Used when navigating items to indicate that an item is
 			// locked.
 			s << " " << translate("locked");
+		}
+		int groupId = *(int*)GetSetMediaItemInfo(item, "I_GROUPID", nullptr);
+		if (groupId) {
+			// Translators: Used when navigating items to indicate that an item is
+			// grouped. {} will be replaced with the group number; e.g. "group 1".
+			s << " " << format(translate("group {}"), groupId);
 		}
 		int takeCount = CountTakes(item);
 		if (takeCount > 1) {
@@ -2515,15 +2500,31 @@ void cmdPaste(Command* command) {
 	}
 	Main_OnCommand(command->gaccel.accel.cmd, 0);
 	int added;
+	// We want to report both tracks and items if both got added; e.g.
+	// "1 track 2 items added".
+	ostringstream s;
 	if ((added = CountTracks(0) - oldTracks) > 0) {
-		// Translators: Reported when tracks are added. {} will be replaced with the
-		// number of tracks; e.g. "2 tracks added".
-		outputMessage(format(
-			translate_plural("{} track added", "{} tracks added", added), added));
-	} else if ((added = CountMediaItems(0) - oldItems) > 0) {
-		outputMessage(format(
-			translate_plural("{} item added", "{} items added", added), added));
-	} else if (envelope &&
+		// Translators: Reported when tracks are added. Other things might be added
+		// at the same time (e.g. items), so other messages may surround this.
+		// {} will be replaced with the number of tracks; e.g. "2 tracks".
+		s << format(translate_plural("{} track", "{} tracks", added), added);
+	}
+	if ((added = CountMediaItems(0) - oldItems) > 0) {
+		if (s.tellp() > 0) {
+			s << " ";
+		}
+		// Translators: Reported when items are added. Other things might be added
+		// at the same time (e.g. tracks), so other messages may surround this.
+		// {} will be replaced with the number of items; e.g. "2 items".
+		s << format(translate_plural("{} item", "{} items", added), added);
+	}
+	if (s.tellp() > 0) {
+		// Translators: Reported after the number of tracks and/or items added.
+		s << " " << translate("added");
+		outputMessage(s);
+		return;
+	}
+	if (envelope &&
 			(added = countEnvelopePointsIncludingAutoItems(envelope) - oldPoints)
 			> 0) {
 		// Translators: Reported when envelope points are added. {} will be replaced
@@ -3403,6 +3404,33 @@ void cmdInsertRegion(Command* command) {
 	outputMessage(format(translate("region {} inserted"), number));
 }
 
+void cmdChangeItemGroup(Command* command) {
+	MediaItem* item = getItemWithFocus();
+	if(!item) {
+		Main_OnCommand(command->gaccel.accel.cmd, 0);
+		return;
+	}
+	int selCount = CountSelectedMediaItems(nullptr);
+	int oldGroupId = *(int*)GetSetMediaItemInfo(item, "I_GROUPID", nullptr);
+	Main_OnCommand(command->gaccel.accel.cmd, 0);
+	int newGroupId = *(int*)GetSetMediaItemInfo(item, "I_GROUPID", nullptr);
+	if (newGroupId) {
+		// Translators: Reported when adding items to a group. {count} will be
+		// replaced with the number of items. {group} will be replaced with the
+		// group number. For example: "2 items added to group 1".
+		outputMessage(format(
+			translate_plural("item added to group {group}", "{count} items added to group {group}", selCount),
+			"count"_a=selCount, "group"_a=newGroupId));
+	} else if (oldGroupId) {
+		// Translators: Reported when removing items from a group. {count} will be
+		// replaced with the number of items. {group} will be replaced with the group
+		// number. For example: "2 items removed from group 1".
+		outputMessage(format(
+			translate_plural("item removed from group {group}", "{count} items removed from group {group}", selCount),
+			"count"_a=selCount, "group"_a=oldGroupId));
+	}
+}
+
 // See the Configuration section of the code below.
 void cmdConfig(Command* command);
 
@@ -3463,6 +3491,8 @@ Command COMMANDS[] = {
 	{MAIN_SECTION, {{0, 0, 41208}, NULL}, NULL, cmdTransientDetectionSettings}, // Transient detection sensitivity/threshold: Adjust...
 	{MAIN_SECTION, {{0, 0, 40157}, NULL}, NULL, cmdInsertMarker}, // Markers: Insert marker at current position
 	{MAIN_SECTION, {{0, 0, 40174}, NULL}, NULL, cmdInsertRegion}, // Markers: Insert region from time selection
+	{MAIN_SECTION, {{0, 0, 40032}, NULL}, NULL, cmdChangeItemGroup}, // Item grouping: Group items
+	{MAIN_SECTION, {{0, 0, 40033}, NULL}, NULL, cmdChangeItemGroup}, // Item grouping: Remove items from group
 	{MIDI_EDITOR_SECTION, {{0, 0, 40036}, NULL}, NULL, cmdMidiMoveCursor}, // View: Go to start of file
 	{MIDI_EVENT_LIST_SECTION, {{0, 0, 40036}, NULL}, NULL, cmdMidiMoveCursor}, // View: Go to start of file
 	{MIDI_EDITOR_SECTION, {{0, 0, 40037}, NULL}, NULL, cmdMidiMoveCursor}, // View: Go to end of file
