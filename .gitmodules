@@ -7,3 +7,6 @@
 [submodule "include/fmt"]
 	path = include/fmt
 	url = https://github.com/fmtlib/fmt
+[submodule "include/js_ReaScriptAPI"]
+	path = include/js_ReaScriptAPI
+	url = https://github.com/juliansader/js_ReaScriptAPI
