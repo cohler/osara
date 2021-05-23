@@ -10,3 +10,6 @@
 [submodule "include/js_ReaScriptAPI"]
 	path = include/js_ReaScriptAPI
 	url = https://github.com/juliansader/js_ReaScriptAPI
+[submodule "js_ReaScriptAPI"]
+	path = js_ReaScriptAPI
+	url = https://github.com/juliansader/js_ReaScriptAPI
