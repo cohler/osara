@@ -67,8 +67,9 @@ else: # Mac
 		subprocess.check_output(("xcode-select", "-p"))
 		.decode().strip())
 	coreFlags = ("-mmacosx-version-min=10.7 -stdlib=libc++ "
-		"-arch x86_64 -arch arm64 "
-		"-isysroot $xcodeDevDir/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk")
+#		"-arch x86_64 -arch arm64 "
+		"-arch x86_64 "
+		"-isysroot $xcodeDevDir/SDKs/MacOSX.sdk")
 	cxxFlags = coreFlags + " -std=c++17 -Werror"
 	env.Append(CXXFLAGS=cxxFlags)
 	env.Append(LINKFLAGS=coreFlags)
