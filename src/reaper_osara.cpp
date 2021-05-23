@@ -41,6 +41,7 @@
 #include "buildVersion.h"
 #include "fxChain.h"
 #include "translation.h"
+#include "js_ReaScriptAPI.h"
 
 using namespace std;
 using namespace fmt::literals;
@@ -122,13 +123,17 @@ void outputMessage(const string& message, bool interrupt) {
 	lastMessageHwnd = guiThreadInfo.hwndFocus;
 }
 
-#else // _WIN32
+#else // __APPLE__
 
+HWND (*GetMainHwnd)();
 void outputMessage(const string& message, bool interrupt) {
-	NSA11yWrapper::osxa11y_announce(message);
+	regex winrx (".*REAPER v(\\d\\.\\d{2,3}) - COHLER CLASSICAL (\\d\\.\\d{2,3}).*");
+	if (JS_Window_GetFocus() == GetMainHwnd() && regex_match (message, winrx))
+		NSA11yWrapper::osxa11y_announce("Main window");
+	else NSA11yWrapper::osxa11y_announce(message);
 }
 
-#endif // _WIN32
+#endif // _WIN32 or __APPLE__
 
 void outputMessage(ostringstream& message, bool interrupt) {
 	outputMessage(message.str(), interrupt);
@@ -851,6 +856,9 @@ int findRegionEndingAt(double wantedEndPos) {
 }
 
 void postGoToMarker(int command) {
+  return;
+  // OSARA timecode is incorrect
+  
 	ostringstream s;
 	int marker, region;
 	double markerPos;
@@ -982,6 +990,7 @@ void postChangeVolumeH(double volume, int command, const char* commandMessage) {
 		s << commandMessage;
 	s << fixed << setprecision(2);
 	s << VAL2DB(volume);
+  s << " dB";
 	outputMessage(s);
 }
 
@@ -990,7 +999,7 @@ void postChangeTrackVolume(int command) {
 	double volume = 0.0;
 	if ( !GetTrackUIVolPan(track, &volume, NULL) )
 		return;
-	postChangeVolumeH(volume, command, "Track ");
+	postChangeVolumeH(volume, command, "");
 }
 
 void postChangeMasterTrackVolume(int command) {
@@ -1270,9 +1279,9 @@ void postSelectMultipleItems(int command) {
 	int count = CountSelectedMediaItems(0);
 	// Translators: Reported when items are selected. {} will be replaced with
 	// the number of items; e.g. "2 items selected".
-	outputMessage(format(
-		translate_plural("{} item selected", "{} items selected", count),
-		count));
+	//outputMessage(format(
+	//	translate_plural("{} item selected", "{} items selected", count),
+	//	count));
 	// Items have just been selected, so the user almost certainly wants to operate on items.
 	fakeFocus = FOCUS_ITEM;
 	selectedEnvelopeIsTake = true;
@@ -1711,8 +1720,8 @@ PostCommand POST_COMMANDS[] = {
 	{40116, postChangeTrackVolume}, // Track: Nudge track volume down
 	{40743, postChangeMasterTrackVolume}, // Track: Nudge master track volume up
 	{40744, postChangeMasterTrackVolume}, // Track: Nudge master track volume down
-	{1011, postChangeHorizontalZoom}, // Zoom out horizontal
-	{1012, postChangeHorizontalZoom}, // Zoom in horizontal
+//	{1011, postChangeHorizontalZoom}, // Zoom out horizontal
+//	{1012, postChangeHorizontalZoom}, // Zoom in horizontal
 	{40283, postChangeTrackPan}, // Track: Nudge track pan left
 	{40284, postChangeTrackPan}, // Track: Nudge track pan right
 	{1155, postCycleRippleMode}, // Options: Cycle ripple editing mode
@@ -2306,6 +2315,7 @@ void moveToTrack(int direction, bool clearSelection=true, bool select=true) {
 			track = GetMasterTrack(0);
 		} else {
 			track = GetTrack(nullptr, num);
+      /*
 			if (!IsTrackVisible(track, false) || isTrackInClosedFolder(track)) {
 				// This track is invisible or inside a closed folder, so skip it.
 				if (direction == 1 && num == count - 1) {
@@ -2316,6 +2326,7 @@ void moveToTrack(int direction, bool clearSelection=true, bool select=true) {
 				}
 				continue;
 			}
+      */
 		}
 		break;
 	}
@@ -2441,7 +2452,7 @@ void moveToItem(int direction, bool clearSelection=true, bool select=true) {
 		}
 		s << " " << formatCursorPosition();
 		addTakeFxNames(take, s);
-		outputMessage(s);
+		//outputMessage(s);
 		return;
 	}
 }
